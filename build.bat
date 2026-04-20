@@ -72,5 +72,6 @@ if not exist "%DEPLOY_DIR%" (
 
 REM Deploy...
 copy /Y CombatSpeedPlus.dll "%DEPLOY_DIR%\CombatSpeedPlus.dll"
+copy /Y CombatSpeedPlus.ini "%DEPLOY_DIR%\CombatSpeedPlus.ini"
 
 echo Deployed to %DEPLOY_DIR%

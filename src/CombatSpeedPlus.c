@@ -17,21 +17,28 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdarg.h>
+#include <stdlib.h>
 #include <wchar.h>
 
 #define MOD_NAME "Combat Speed+"
 
-static const bool ENABLE_DEBUG_LOGS = true;
+static const bool ENABLE_DEBUG_LOGS = false;
 
 #define COMBAT_SPEED_KEY "combat_speed"
-#define COMBAT_SPEED_MIN 0.25
-#define COMBAT_SPEED_MAX 8.00
-#define COMBAT_SPEED_STEP 0.25
-#define COMBAT_SPEED_COUNT 32
+#define DEFAULT_COMBAT_SPEED_MIN 0.25
+#define DEFAULT_COMBAT_SPEED_MAX 8.00
+#define DEFAULT_COMBAT_SPEED_STEP 0.25
+#define MAX_COMBAT_SPEED_COUNT 256U
 
 static MewjectorAPI g_mj;
 static fn_register_selector g_origRegisterSelector = NULL;
 static fn_game_allocate g_gameAllocate = NULL;
+static double g_combatSpeedMin = DEFAULT_COMBAT_SPEED_MIN;
+static double g_combatSpeedMax = DEFAULT_COMBAT_SPEED_MAX;
+static double g_combatSpeedStep = DEFAULT_COMBAT_SPEED_STEP;
+static uint32_t g_combatSpeedCount = 32U;
+static wchar_t g_configPathW[MAX_PATH] = { 0 };
+static HMODULE g_hModule = NULL;
 
 static void Log(const char* fmt, ...)
 {
@@ -202,6 +209,156 @@ static void FormatLabelString(double value, wchar_t* outBuffer, size_t outBuffer
     }
 }
 
+static double ParseConfigDouble(const char* text, double fallbackValue)
+{
+    char* parseEnd;
+    double parsed;
+
+    if (!text || !text[0])
+    {
+        return fallbackValue;
+    }
+
+    parsed = strtod(text, &parseEnd);
+
+    if (parseEnd == text)
+    {
+        return fallbackValue;
+    }
+
+    return parsed;
+}
+
+static void BuildDefaultConfigPathFromModule(void)
+{
+    wchar_t modulePathW[MAX_PATH];
+    wchar_t* extension;
+
+    g_configPathW[0] = L'\0';
+    modulePathW[0] = L'\0';
+
+    if (!g_hModule)
+    {
+        return;
+    }
+
+    if (!GetModuleFileNameW(g_hModule, modulePathW, MAX_PATH))
+    {
+        return;
+    }
+
+    wcsncpy(g_configPathW, modulePathW, MAX_PATH - 1U);
+    g_configPathW[MAX_PATH - 1U] = L'\0';
+
+    extension = wcsrchr(g_configPathW, L'.');
+
+    if (extension)
+    {
+        wcscpy(extension, L".ini");
+    }
+    else
+    {
+        wcscat(g_configPathW, L".ini");
+    }
+}
+
+static void LoadCombatSpeedConfig(void)
+{
+    char valueText[64];
+    double configuredMin;
+    double configuredMax;
+    double configuredStep;
+    double span;
+    double stepsFloat;
+    uint32_t computedCount;
+
+    BuildDefaultConfigPathFromModule();
+
+    configuredMin = DEFAULT_COMBAT_SPEED_MIN;
+    configuredMax = DEFAULT_COMBAT_SPEED_MAX;
+    configuredStep = DEFAULT_COMBAT_SPEED_STEP;
+
+    if (g_configPathW[0] != L'\0')
+    {
+        wchar_t valueTextW[64];
+        int converted;
+
+        valueText[0] = '\0';
+        valueTextW[0] = L'\0';
+        GetPrivateProfileStringW(L"CombatSpeed", L"Min", L"0.25", valueTextW, (DWORD)(sizeof(valueTextW) / sizeof(valueTextW[0])), g_configPathW);
+        converted = WideCharToMultiByte(CP_UTF8, 0, valueTextW, -1, valueText, (int)sizeof(valueText), NULL, NULL);
+
+        if (converted <= 0)
+        {
+            valueText[0] = '\0';
+        }
+
+        configuredMin = ParseConfigDouble(valueText, configuredMin);
+
+        valueText[0] = '\0';
+        valueTextW[0] = L'\0';
+        GetPrivateProfileStringW(L"CombatSpeed", L"Max", L"8.00", valueTextW, (DWORD)(sizeof(valueTextW) / sizeof(valueTextW[0])), g_configPathW);
+        converted = WideCharToMultiByte(CP_UTF8, 0, valueTextW, -1, valueText, (int)sizeof(valueText), NULL, NULL);
+
+        if (converted <= 0)
+        {
+            valueText[0] = '\0';
+        }
+
+        configuredMax = ParseConfigDouble(valueText, configuredMax);
+
+        valueText[0] = '\0';
+        valueTextW[0] = L'\0';
+        GetPrivateProfileStringW(L"CombatSpeed", L"Step", L"0.25", valueTextW, (DWORD)(sizeof(valueTextW) / sizeof(valueTextW[0])), g_configPathW);
+        converted = WideCharToMultiByte(CP_UTF8, 0, valueTextW, -1, valueText, (int)sizeof(valueText), NULL, NULL);
+
+        if (converted <= 0)
+        {
+            valueText[0] = '\0';
+        }
+
+        configuredStep = ParseConfigDouble(valueText, configuredStep);
+    }
+
+    if (configuredMin <= 0.0)
+    {
+        configuredMin = DEFAULT_COMBAT_SPEED_MIN;
+    }
+
+    if (configuredMax < configuredMin)
+    {
+        configuredMax = configuredMin;
+    }
+
+    if (configuredStep <= 0.0)
+    {
+        configuredStep = DEFAULT_COMBAT_SPEED_STEP;
+    }
+
+    span = configuredMax - configuredMin;
+    stepsFloat = (span / configuredStep) + 1.0000001;
+
+    if (stepsFloat < 1.0)
+    {
+        stepsFloat = 1.0;
+    }
+
+    computedCount = (uint32_t)stepsFloat;
+
+    if (computedCount > MAX_COMBAT_SPEED_COUNT)
+    {
+        computedCount = MAX_COMBAT_SPEED_COUNT;
+        configuredMax = configuredMin + ((double)(computedCount - 1U) * configuredStep);
+    }
+
+    g_combatSpeedMin = configuredMin;
+    g_combatSpeedMax = configuredMax;
+    g_combatSpeedStep = configuredStep;
+    g_combatSpeedCount = computedCount;
+
+    Log("CombatSpeed config loaded: min=%.2f max=%.2f step=%.2f count=%u source=%s", g_combatSpeedMin, g_combatSpeedMax, g_combatSpeedStep, g_combatSpeedCount, g_configPathW[0] ? "ini" : "defaults");
+}
+
 static int ResolveGameAllocator(void)
 {
     UINT_PTR gameBase;
@@ -256,23 +413,22 @@ static int BuildCombatSpeedOptions(OptionVector* outVector)
         return 0;
     }
 
-    entries = (SelectorOption*)g_gameAllocate(sizeof(SelectorOption) * COMBAT_SPEED_COUNT);
+    entries = (SelectorOption*)g_gameAllocate(sizeof(SelectorOption) * g_combatSpeedCount);
     
     if (!entries)
     {
         return 0;
     }
 
-    memset(entries, 0, sizeof(SelectorOption) * COMBAT_SPEED_COUNT);
+    memset(entries, 0, sizeof(SelectorOption) * g_combatSpeedCount);
 
-    for (index = 0U; index < COMBAT_SPEED_COUNT; ++index)
+    for (index = 0U; index < g_combatSpeedCount; ++index)
     {
         char valueText[16];
         wchar_t labelText[16];
         double value;
 
-        /* (8.00 - 0.25) / 0.25 + 1 = 32 entries */
-        value = COMBAT_SPEED_MIN + ((double)index * COMBAT_SPEED_STEP);
+        value = g_combatSpeedMin + ((double)index * g_combatSpeedStep);
 
         FormatValueString(value, valueText, sizeof(valueText));
         FormatLabelString(value, labelText, sizeof(labelText));
@@ -282,8 +438,8 @@ static int BuildCombatSpeedOptions(OptionVector* outVector)
     }
 
     outVector->begin = entries;
-    outVector->end = entries + COMBAT_SPEED_COUNT;
-    outVector->capacity_end = entries + COMBAT_SPEED_COUNT;
+    outVector->end = entries + g_combatSpeedCount;
+    outVector->capacity_end = entries + g_combatSpeedCount;
     return 1;
 }
 
@@ -304,7 +460,7 @@ static void* __fastcall HookRegisterSelector(void* panel, NarrowString* key, Nar
         if (BuildCombatSpeedOptions(&replacementOptions))
         {
             effectiveOptions = &replacementOptions;
-            Log("Replacing combat_speed options with %.2fx..%.2fx in %.2fx steps using narrow values + wide labels", COMBAT_SPEED_MIN, COMBAT_SPEED_MAX, COMBAT_SPEED_STEP);
+            Log("Replacing combat_speed options with %.2fx..%.2fx in %.2fx steps using narrow values + wide labels", g_combatSpeedMin, g_combatSpeedMax, g_combatSpeedStep);
         }
         else
         {
@@ -332,6 +488,7 @@ static void Initialize(void)
     trampoline = NULL;
 
     ResolveGameAllocator();
+    LoadCombatSpeedConfig();
 
     /*
     * MAGIC NUMBERS!!!! 
@@ -355,6 +512,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID reserved)
 
     if (reason == DLL_PROCESS_ATTACH)
     {
+        g_hModule = hModule;
         DisableThreadLibraryCalls(hModule);
 
         if (MJ_Resolve(&g_mj))
@@ -372,5 +530,5 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID reserved)
         }
     }
 
-    return TRUE;
+    return true;
 }
