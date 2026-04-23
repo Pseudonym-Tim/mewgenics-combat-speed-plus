@@ -73,6 +73,8 @@ if not exist "%DEPLOY_DIR%" (
 REM Deploy main files...
 copy /Y CombatSpeedPlus.dll "%DEPLOY_DIR%\CombatSpeedPlus.dll"
 copy /Y CombatSpeedPlus.ini "%DEPLOY_DIR%\CombatSpeedPlus.ini"
+copy /Y description.json "%DEPLOY_DIR%\description.json"
+copy /Y preview.png "%DEPLOY_DIR%\preview.png"
 
 REM Deploy swfs folder and its contents...
 if exist "%~dp0swfs" (
