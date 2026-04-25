@@ -33,6 +33,13 @@ static const bool ENABLE_DEBUG_LOGS = false;
 #define DEFAULT_PRESET_SPEED_COUNT 8U
 #define MAX_COMBAT_SPEED_COUNT 256U
 
+#define MAX_HOTKEYS_PER_BINDING 2U
+
+typedef struct HotkeyBinding
+{
+    int keys[MAX_HOTKEYS_PER_BINDING];
+} HotkeyBinding;
+
 static MewjectorAPI g_mj;
 static fn_register_selector g_origRegisterSelector = NULL;
 static fn_refresh_combat_speed g_origRefreshCombatSpeed = NULL;
@@ -48,6 +55,22 @@ static double g_combatSpeedMax = DEFAULT_COMBAT_SPEED_MAX;
 static double g_combatSpeedStep = DEFAULT_COMBAT_SPEED_STEP;
 static uint32_t g_combatSpeedCount = 32U;
 static double g_presetCombatSpeeds[DEFAULT_PRESET_SPEED_COUNT] = { 1.00, 2.00, 3.00, 4.00, 5.00, 6.00, 7.00, 8.00 };
+static HotkeyBinding g_decreaseHotkey = { { VK_OEM_MINUS, VK_SUBTRACT } };
+static HotkeyBinding g_increaseHotkey = { { VK_OEM_PLUS, VK_ADD } };
+static HotkeyBinding g_resetHotkey = { { 0x30, VK_NUMPAD0 } };
+
+static HotkeyBinding g_presetHotkeys[DEFAULT_PRESET_SPEED_COUNT] =
+{
+    { { 0x31, VK_NUMPAD1 } },
+    { { 0x32, VK_NUMPAD2 } },
+    { { 0x33, VK_NUMPAD3 } },
+    { { 0x34, VK_NUMPAD4 } },
+    { { 0x35, VK_NUMPAD5 } },
+    { { 0x36, VK_NUMPAD6 } },
+    { { 0x37, VK_NUMPAD7 } },
+    { { 0x38, VK_NUMPAD8 } }
+};
+
 static wchar_t g_configPathW[MAX_PATH] = { 0 };
 static HMODULE g_hModule = NULL;
 static HANDLE g_hotkeyThread = NULL;
@@ -231,6 +254,330 @@ static void FormatLabelString(double value, wchar_t* outBuffer, size_t outBuffer
 
 static void StartHotkeyThread(void);
 static double ClampCombatSpeed(double value);
+
+static int StringEqualsInsensitive(const char* left, const char* right)
+{
+    char leftChar;
+    char rightChar;
+
+    if (!left || !right)
+    {
+        return 0;
+    }
+
+    while (*left && *right)
+    {
+        leftChar = *left;
+        rightChar = *right;
+
+        if (leftChar >= 'a' && leftChar <= 'z')
+        {
+            leftChar = (char)(leftChar - ('a' - 'A'));
+        }
+
+        if (rightChar >= 'a' && rightChar <= 'z')
+        {
+            rightChar = (char)(rightChar - ('a' - 'A'));
+        }
+
+        if (leftChar != rightChar)
+        {
+            return 0;
+        }
+
+        ++left;
+        ++right;
+    }
+
+    return *left == '\0' && *right == '\0';
+}
+
+static void TrimToken(char* text)
+{
+    char* start;
+    char* end;
+    size_t length;
+
+    if (!text)
+    {
+        return;
+    }
+
+    start = text;
+
+    while (*start == ' ' || *start == '\t' || *start == '\r' || *start == '\n')
+    {
+        ++start;
+    }
+
+    end = start + strlen(start);
+
+    while (end > start && (end[-1] == ' ' || end[-1] == '\t' || end[-1] == '\r' || end[-1] == '\n'))
+    {
+        --end;
+    }
+
+    length = (size_t)(end - start);
+
+    if (start != text && length > 0U)
+    {
+        memmove(text, start, length);
+    }
+
+    text[length] = '\0';
+}
+
+static int IsUnsetHotkeyValue(const char* text)
+{
+    char buffer[128];
+
+    if (!text)
+    {
+        return 1;
+    }
+
+    _snprintf_s(buffer, sizeof(buffer), _TRUNCATE, "%s", text);
+    TrimToken(buffer);
+
+    if (!buffer[0])
+    {
+        return 1;
+    }
+
+    return StringEqualsInsensitive(buffer, "NONE");
+}
+
+static int ParseFunctionKeyName(const char* text)
+{
+    char* parseEnd;
+    long functionIndex;
+
+    if (!text || (text[0] != 'F' && text[0] != 'f'))
+    {
+        return 0;
+    }
+
+    functionIndex = strtol(text + 1, &parseEnd, 10);
+
+    if (parseEnd == text + 1 || *parseEnd != '\0')
+    {
+        return 0;
+    }
+
+    if (functionIndex < 1L || functionIndex > 24L)
+    {
+        return 0;
+    }
+
+    return VK_F1 + (int)(functionIndex - 1L);
+}
+
+static int ParseNamedVirtualKey(const char* text)
+{
+    static const struct
+    {
+        const char* name;
+        int virtualKey;
+    } namedKeys[] =
+    {
+        { "BACKSPACE", VK_BACK },
+        { "TAB", VK_TAB },
+        { "ENTER", VK_RETURN },
+        { "RETURN", VK_RETURN },
+        { "SHIFT", VK_SHIFT },
+        { "LSHIFT", VK_LSHIFT },
+        { "RSHIFT", VK_RSHIFT },
+        { "CTRL", VK_CONTROL },
+        { "CONTROL", VK_CONTROL },
+        { "LCTRL", VK_LCONTROL },
+        { "RCTRL", VK_RCONTROL },
+        { "ALT", VK_MENU },
+        { "MENU", VK_MENU },
+        { "LALT", VK_LMENU },
+        { "RALT", VK_RMENU },
+        { "PAUSE", VK_PAUSE },
+        { "CAPSLOCK", VK_CAPITAL },
+        { "ESC", VK_ESCAPE },
+        { "ESCAPE", VK_ESCAPE },
+        { "SPACE", VK_SPACE },
+        { "PAGEUP", VK_PRIOR },
+        { "PAGEDOWN", VK_NEXT },
+        { "END", VK_END },
+        { "HOME", VK_HOME },
+        { "LEFT", VK_LEFT },
+        { "UP", VK_UP },
+        { "RIGHT", VK_RIGHT },
+        { "DOWN", VK_DOWN },
+        { "INSERT", VK_INSERT },
+        { "DELETE", VK_DELETE },
+        { "NUMPAD0", VK_NUMPAD0 },
+        { "NUMPAD1", VK_NUMPAD1 },
+        { "NUMPAD2", VK_NUMPAD2 },
+        { "NUMPAD3", VK_NUMPAD3 },
+        { "NUMPAD4", VK_NUMPAD4 },
+        { "NUMPAD5", VK_NUMPAD5 },
+        { "NUMPAD6", VK_NUMPAD6 },
+        { "NUMPAD7", VK_NUMPAD7 },
+        { "NUMPAD8", VK_NUMPAD8 },
+        { "NUMPAD9", VK_NUMPAD9 },
+        { "MULTIPLY", VK_MULTIPLY },
+        { "ADD", VK_ADD },
+        { "SUBTRACT", VK_SUBTRACT },
+        { "DECIMAL", VK_DECIMAL },
+        { "DIVIDE", VK_DIVIDE },
+        { "OEM_PLUS", VK_OEM_PLUS },
+        { "PLUS", VK_OEM_PLUS },
+        { "OEM_MINUS", VK_OEM_MINUS },
+        { "MINUS", VK_OEM_MINUS },
+        { "COMMA", VK_OEM_COMMA },
+        { "PERIOD", VK_OEM_PERIOD },
+        { "SLASH", VK_OEM_2 },
+        { "SEMICOLON", VK_OEM_1 },
+        { "QUOTE", VK_OEM_7 },
+        { "LBRACKET", VK_OEM_4 },
+        { "RBRACKET", VK_OEM_6 },
+        { "BACKSLASH", VK_OEM_5 },
+        { "TILDE", VK_OEM_3 }
+    };
+    
+    size_t index;
+    int functionKey;
+
+    functionKey = ParseFunctionKeyName(text);
+
+    if (functionKey != 0)
+    {
+        return functionKey;
+    }
+
+    for (index = 0U; index < sizeof(namedKeys) / sizeof(namedKeys[0]); ++index)
+    {
+        if (StringEqualsInsensitive(text, namedKeys[index].name))
+        {
+            return namedKeys[index].virtualKey;
+        }
+    }
+
+    return 0;
+}
+
+static int ParseVirtualKeyToken(const char* text)
+{
+    char* parseEnd;
+    long numericValue;
+    int namedValue;
+
+    if (!text || !text[0])
+    {
+        return 0;
+    }
+
+    if (text[1] == '\0')
+    {
+        if (text[0] >= 'a' && text[0] <= 'z')
+        {
+            return text[0] - ('a' - 'A');
+        }
+
+        if ((text[0] >= 'A' && text[0] <= 'Z') || (text[0] >= '0' && text[0] <= '9'))
+        {
+            return text[0];
+        }
+    }
+
+    namedValue = ParseNamedVirtualKey(text);
+
+    if (namedValue != 0)
+    {
+        return namedValue;
+    }
+
+    numericValue = strtol(text, &parseEnd, 0);
+
+    if (parseEnd == text || *parseEnd != '\0')
+    {
+        return 0;
+    }
+
+    if (numericValue <= 0L || numericValue > 255L)
+    {
+        return 0;
+    }
+
+    return (int)numericValue;
+}
+
+static void ParseHotkeyBinding(const char* text, HotkeyBinding* binding)
+{
+    char buffer[128];
+    char* cursor;
+    uint32_t parsedCount;
+
+    if (!binding)
+    {
+        return;
+    }
+
+    memset(binding->keys, 0, sizeof(binding->keys));
+
+    if (IsUnsetHotkeyValue(text))
+    {
+        return;
+    }
+
+    _snprintf_s(buffer, sizeof(buffer), _TRUNCATE, "%s", text);
+    cursor = buffer;
+    parsedCount = 0U;
+
+    while (cursor && parsedCount < MAX_HOTKEYS_PER_BINDING)
+    {
+        char* separator;
+        int virtualKey;
+
+        separator = strchr(cursor, ',');
+
+        if (separator)
+        {
+            *separator = '\0';
+        }
+
+        TrimToken(cursor);
+        virtualKey = ParseVirtualKeyToken(cursor);
+
+        if (virtualKey != 0)
+        {
+            binding->keys[parsedCount] = virtualKey;
+            ++parsedCount;
+        }
+
+        if (!separator)
+        {
+            break;
+        }
+
+        cursor = separator + 1;
+    }
+}
+
+static int IsHotkeyBindingPressed(const HotkeyBinding* binding)
+{
+    uint32_t index;
+
+    if (!binding)
+    {
+        return 0;
+    }
+
+    for (index = 0U; index < MAX_HOTKEYS_PER_BINDING; ++index)
+    {
+        if (binding->keys[index] != 0 && (GetAsyncKeyState(binding->keys[index]) & 0x8000) != 0)
+        {
+            return 1;
+        }
+    }
+
+    return 0;
+}
 
 static double ParseConfigDouble(const char* text, double fallbackValue)
 {
@@ -451,6 +798,52 @@ static void LoadCombatSpeedConfig(void)
             {
                 configuredPreset = ParseConfigDouble(valueText, g_presetCombatSpeeds[presetIndex]);
                 g_presetCombatSpeeds[presetIndex] = SnapValueToConfiguredStep(configuredPreset);
+            }
+        }
+
+        valueText[0] = '\0';
+        valueTextW[0] = L'\0';
+        GetPrivateProfileStringW(L"Hotkeys", L"Decrease", L"MISSING", valueTextW, (DWORD)(sizeof(valueTextW) / sizeof(valueTextW[0])), g_configPathW);
+        converted = WideCharToMultiByte(CP_UTF8, 0, valueTextW, -1, valueText, (int)sizeof(valueText), NULL, NULL);
+
+        if (converted > 0 && strcmp(valueText, "MISSING") != 0)
+        {
+            ParseHotkeyBinding(valueText, &g_decreaseHotkey);
+        }
+
+        valueText[0] = '\0';
+        valueTextW[0] = L'\0';
+        GetPrivateProfileStringW(L"Hotkeys", L"Increase", L"MISSING", valueTextW, (DWORD)(sizeof(valueTextW) / sizeof(valueTextW[0])), g_configPathW);
+        converted = WideCharToMultiByte(CP_UTF8, 0, valueTextW, -1, valueText, (int)sizeof(valueText), NULL, NULL);
+
+        if (converted > 0 && strcmp(valueText, "MISSING") != 0)
+        {
+            ParseHotkeyBinding(valueText, &g_increaseHotkey);
+        }
+
+        valueText[0] = '\0';
+        valueTextW[0] = L'\0';
+        GetPrivateProfileStringW(L"Hotkeys", L"Reset", L"MISSING", valueTextW, (DWORD)(sizeof(valueTextW) / sizeof(valueTextW[0])), g_configPathW);
+        converted = WideCharToMultiByte(CP_UTF8, 0, valueTextW, -1, valueText, (int)sizeof(valueText), NULL, NULL);
+
+        if (converted > 0 && strcmp(valueText, "MISSING") != 0)
+        {
+            ParseHotkeyBinding(valueText, &g_resetHotkey);
+        }
+
+        for (presetIndex = 0U; presetIndex < DEFAULT_PRESET_SPEED_COUNT; ++presetIndex)
+        {
+            wchar_t keyNameW[16];
+
+            _snwprintf_s(keyNameW, sizeof(keyNameW) / sizeof(keyNameW[0]), _TRUNCATE, L"Preset%u", presetIndex + 1U);
+            valueText[0] = '\0';
+            valueTextW[0] = L'\0';
+            GetPrivateProfileStringW(L"Hotkeys", keyNameW, L"MISSING", valueTextW, (DWORD)(sizeof(valueTextW) / sizeof(valueTextW[0])), g_configPathW);
+            converted = WideCharToMultiByte(CP_UTF8, 0, valueTextW, -1, valueText, (int)sizeof(valueText), NULL, NULL);
+
+            if (converted > 0 && strcmp(valueText, "MISSING") != 0)
+            {
+                ParseHotkeyBinding(valueText, &g_presetHotkeys[presetIndex]);
             }
         }
     }
@@ -925,48 +1318,32 @@ static void ConsumeQueuedCombatSpeedAdjustments(void* combatOwner)
 
 static int IsDecreasePressed(void)
 {
-    SHORT stateMain;
-    SHORT stateNumpad;
-
-    stateMain = GetAsyncKeyState(VK_OEM_MINUS);
-    stateNumpad = GetAsyncKeyState(VK_SUBTRACT);
-    return ((stateMain & 0x8000) != 0) || ((stateNumpad & 0x8000) != 0);
+    return IsHotkeyBindingPressed(&g_decreaseHotkey);
 }
+
 
 static int IsIncreasePressed(void)
 {
-    SHORT stateMain;
-    SHORT stateNumpad;
-
-    stateMain = GetAsyncKeyState(VK_OEM_PLUS);
-    stateNumpad = GetAsyncKeyState(VK_ADD);
-    return ((stateMain & 0x8000) != 0) || ((stateNumpad & 0x8000) != 0);
+    return IsHotkeyBindingPressed(&g_increaseHotkey);
 }
+
 
 static int IsResetPressed(void)
 {
-    SHORT stateMain;
-    SHORT stateNumpad;
-
-    stateMain = GetAsyncKeyState(0x30);
-    stateNumpad = GetAsyncKeyState(VK_NUMPAD0);
-    return ((stateMain & 0x8000) != 0) || ((stateNumpad & 0x8000) != 0);
+    return IsHotkeyBindingPressed(&g_resetHotkey);
 }
+
 
 static int IsPresetPressed(uint32_t presetIndex)
 {
-    SHORT state;
-    int virtualKey;
-
     if (presetIndex >= DEFAULT_PRESET_SPEED_COUNT)
     {
         return 0;
     }
 
-    virtualKey = 0x31 + (int)presetIndex;
-    state = GetAsyncKeyState(virtualKey);
-    return (state & 0x8000) != 0;
+    return IsHotkeyBindingPressed(&g_presetHotkeys[presetIndex]);
 }
+
 
 static DWORD WINAPI HotkeyThreadProc(LPVOID parameter)
 {
