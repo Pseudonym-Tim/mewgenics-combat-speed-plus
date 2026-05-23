@@ -1,0 +1,99 @@
+{
+  "symbols": {
+    "RVA_REGISTER_SELECTOR": {
+      "resolver": "pattern_start_rva",
+      "search_sections": [
+        ".text"
+      ],
+      "pattern": "4C 89 4C 24 20 4C 89 44 24 18 48 89 54 24 10 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 F1 48 81 EC C8 00 00 00"
+    },
+    "RVA_GAME_ALLOCATOR": {
+      "resolver": "pattern_start_rva",
+      "search_sections": [
+        ".text"
+      ],
+      "pattern": "48 83 EC 28 48 85 C9 75 07 33 C0 48 83 C4 28 C3 48 81 F9 00 10 00 00"
+    },
+    "RVA_SETTINGS_SET_STRING": {
+      "resolver": "pattern_start_rva",
+      "search_sections": [
+        ".text"
+      ],
+      "pattern": "48 89 5C 24 08 48 89 6C 24 20 4C 89 44 24 18 48 89 54 24 10 56 57 41 54 41 56 41 57 48 83 EC 20 49 8B F8 48 8B F2 4C 8B F9"
+    },
+    "RVA_SETTINGS_GET_FLOAT": {
+      "resolver": "pattern_start_rva",
+      "search_sections": [
+        ".text"
+      ],
+      "pattern": "48 8B C4 48 89 58 08 48 89 78 18 48 89 50 10 55 48 8D 68 A1 48 81 EC B0 00 00 00 0F 29 70 E8 48 8B DA 48 8B F9"
+    },
+    "RVA_REFRESH_COMBAT_SPEED": {
+      "resolver": "pattern_start_rva",
+      "search_sections": [
+        ".text"
+      ],
+      "pattern": "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 C8 FE FF FF 48 81 EC 38 02 00 00 0F 29 B4 24 20 02 00 00"
+    },
+    "RVA_REFRESH_COMBAT_HUD": {
+      "resolver": "pattern_start_rva",
+      "search_sections": [
+        ".text"
+      ],
+      "pattern": "48 8B C4 48 89 58 08 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 B8 FA FF FF 48 81 EC 10 06 00 00 0F 29 70 B8 0F 29 78 A8"
+    },
+    "RVA_FIND_UI_CHILD": {
+      "resolver": "pattern_start_rva",
+      "search_sections": [
+        ".text"
+      ],
+      "pattern": "48 89 54 24 10 53 56 57 48 83 EC 60 48 8B F2 48 8B D9 48 8B 89 80 00 00 00 48 85 C9 75 12 48 8B CA E8 ?? ?? ?? ?? 33 C0 48 83 C4 60 5F 5E 5B C3 48 8B 01 FF 50 18 48 8B 8B 80 00 00 00 48 85 C9 74 24 48 8B 01 FF 10 83 F8 01 74 11 48 8B 8B 80 00 00 00 48 8B 01 FF 10 83 F8 02 75 09 48 8B 9B 80 00 00 00 EB 02 33 DB 48 8B D6 48 8D 4C 24 20 E8 ?? ?? ?? ?? 48 8B F8 48 89 84 24 80 00 00 00 48 8B D0 48 8D 4C 24 40 E8 ?? ?? ?? ?? 45 33 C0"
+    },
+    "RVA_INIT_NARROW_STRING": {
+      "resolver": "pattern_start_rva",
+      "search_sections": [
+        ".text"
+      ],
+      "pattern": "40 53 48 83 EC 20 33 C0 0F 57 C0 0F 11 01 48 89 41 10 48 8B D9 48 89 41 18 49 C7 C0 FF FF FF FF 49 FF C0 42 38 04 02 75 F7 E8 ?? ?? ?? ?? 48 8B C3"
+    },
+    "RVA_STRING_DESTRUCTOR": {
+      "resolver": "pattern_start_rva",
+      "search_sections": [
+        ".text"
+      ],
+      "pattern": "40 53 48 83 EC 20 48 8B 51 18 48 8B D9 48 83 FA 0F 76 2C 48 8B 09 48 FF C2 48 81 FA 00 10 00 00"
+    },
+    "RVA_SET_TEXT_ELEMENT_STRING": {
+      "resolver": "pattern_start_rva",
+      "search_sections": [
+        ".text"
+      ],
+      "pattern": "48 89 5C 24 08 48 89 74 24 20 48 89 54 24 10 57 48 83 EC 70 41 0F B6 F9 48 8B DA 48 8B F1 45 84 C0 74 3B"
+    },
+    "RVA_SETTINGS_SINGLETON": {
+      "resolver": "rip_relative_rva",
+      "search_sections": [
+        ".text"
+      ],
+      "displacement_offset": 22,
+      "instruction_end_offset": 26,
+      "pattern": "44 38 A9 80 01 00 00 74 0A F2 0F 10 35 ?? ?? ?? ?? EB 5E 48 8B 0D ?? ?? ?? ?? 48 81 C1 ?? ?? ?? ?? 0F 57 C0"
+    },
+    "SETTINGS_ROOT_OFFSET": {
+      "resolver": "u32_at_pattern_offset",
+      "search_sections": [
+        ".text"
+      ],
+      "value_offset": 29,
+      "pattern": "44 38 A9 80 01 00 00 74 0A F2 0F 10 35 ?? ?? ?? ?? EB 5E 48 8B 0D ?? ?? ?? ?? 48 81 C1 ?? ?? ?? ?? 0F 57 C0"
+    },
+    "COMBAT_HUD_ROOT_OFFSET": {
+      "resolver": "u8_at_pattern_offset",
+      "search_sections": [
+        ".text"
+      ],
+      "value_offset": 3,
+      "pattern": "49 8B 46 ?? 88 48 50 49 8B CE E8 ?? ?? ?? ?? 0F B6 80 B3 00 00 00"
+    }
+  }
+}
