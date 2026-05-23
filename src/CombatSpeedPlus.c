@@ -25,7 +25,6 @@ static const bool ENABLE_DEBUG_LOGS = false;
 
 #define COMBAT_SPEED_KEY "combat_speed"
 #define COMBAT_HUD_TEXT_NAME "combat_hud_text"
-#define COMBAT_HUD_ROOT_OFFSET 0x38
 #define DEFAULT_COMBAT_SPEED_MIN 0.25
 #define DEFAULT_COMBAT_SPEED_MAX 8.00
 #define DEFAULT_COMBAT_SPEED_STEP 0.25
