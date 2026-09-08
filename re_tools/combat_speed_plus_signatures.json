@@ -5,7 +5,8 @@
       "search_sections": [
         ".text"
       ],
-      "pattern": "4C 89 4C 24 20 4C 89 44 24 18 48 89 54 24 10 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 F1 48 81 EC C8 00 00 00"
+      "pattern": "4C 89 4C 24 20 4C 89 44 24 18 48 89 54 24 10 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 F1 48 81 EC C8 00 00 00",
+      "hook_overwrite_length": 15
     },
     "RVA_GAME_ALLOCATOR": {
       "resolver": "pattern_start_rva",
@@ -33,14 +34,16 @@
       "search_sections": [
         ".text"
       ],
-      "pattern": "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 C8 FE FF FF 48 81 EC 38 02 00 00 0F 29 B4 24 20 02 00 00"
+      "pattern": "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 C8 FE FF FF 48 81 EC 38 02 00 00 0F 29 B4 24 20 02 00 00",
+      "hook_overwrite_length": 21
     },
     "RVA_REFRESH_COMBAT_HUD": {
       "resolver": "pattern_start_rva",
       "search_sections": [
         ".text"
       ],
-      "pattern": "48 8B C4 48 89 58 08 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 B8 FA FF FF 48 81 EC 10 06 00 00 0F 29 70 B8 0F 29 78 A8"
+      "pattern": "48 8B C4 48 89 58 08 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 B8 FA FF FF 48 81 EC 10 06 00 00 0F 29 70 B8 0F 29 78 A8",
+      "hook_overwrite_length": 16
     },
     "RVA_FIND_UI_CHILD": {
       "resolver": "pattern_start_rva",

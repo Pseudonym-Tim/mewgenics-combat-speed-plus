@@ -1531,7 +1531,7 @@ static void Initialize(void)
     }
 
     /*
-    * 0x8D61A0 does not have a safe 15-byte boundary... The first whole-instruction boundary past 15 bytes is 21 bytes...
+    * This prologue does not have a safe 15-byte boundary... The first whole-instruction boundary past 15 bytes is 21 bytes...
     */
     if (g_mj.InstallHook(RVA_REFRESH_COMBAT_SPEED, 21U, (void*)HookRefreshCombatSpeed, &refreshTrampoline, 32U, MOD_NAME))
     {
